@@ -14,6 +14,15 @@ type Order = {
   paid_amount?: number;
   total_amount?: number;
   currency_id?: string;
+  order_items?: Array<{
+    quantity?: number;
+    item?: {
+      id?: string;
+      title?: string;
+      seller_sku?: string | null;
+      seller_custom_field?: string | null;
+    };
+  }>;
 };
 
 type OrdersResponse = {
@@ -23,6 +32,26 @@ type OrdersResponse = {
     offset: number;
   };
   results: Order[];
+};
+
+type ItemLookupResponse = {
+  code: number;
+  body?: {
+    id?: string;
+    thumbnail?: string;
+    seller_custom_field?: string | null;
+    attributes?: Array<{
+      id?: string;
+      value_name?: string;
+    }>;
+  };
+};
+
+type TopSku = {
+  itemId: string;
+  sku: string;
+  image: string | null;
+  units: number;
 };
 
 const requiredEnv = (name: string) => {
@@ -147,6 +176,83 @@ const fetchPaidOrders = async (
   return orders;
 };
 
+const fetchItemImages = async (accessToken: string, itemIds: string[]) => {
+  const images = new Map<string, string | null>();
+  const uniqueIds = [...new Set(itemIds)].slice(0, 20);
+
+  for (let index = 0; index < uniqueIds.length; index += 20) {
+    const batch = uniqueIds.slice(index, index + 20);
+    const url = new URL("https://api.mercadolibre.com/items");
+
+    url.searchParams.set("ids", batch.join(","));
+    url.searchParams.set("attributes", "id,thumbnail");
+
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    if (!response.ok) {
+      continue;
+    }
+
+    const payload = (await response.json()) as ItemLookupResponse[];
+
+    payload.forEach((item) => {
+      if (item.body?.id) {
+        images.set(item.body.id, item.body.thumbnail ?? null);
+      }
+    });
+  }
+
+  return images;
+};
+
+const resolveSku = (item: NonNullable<Order["order_items"]>[number]["item"]) =>
+  item?.seller_sku ??
+  item?.seller_custom_field ??
+  item?.id ??
+  "SKU sem cadastro";
+
+const buildTopSkus = async (accessToken: string, orders: Order[]) => {
+  const skuMap = new Map<string, TopSku>();
+
+  orders.forEach((order) => {
+    order.order_items?.forEach((orderItem) => {
+      const itemId = orderItem.item?.id;
+
+      if (!itemId) {
+        return;
+      }
+
+      const sku = resolveSku(orderItem.item);
+      const existing = skuMap.get(sku);
+      const units = orderItem.quantity ?? 0;
+
+      skuMap.set(sku, {
+        itemId,
+        sku,
+        image: existing?.image ?? null,
+        units: (existing?.units ?? 0) + units,
+      });
+    });
+  });
+
+  const topSkus = [...skuMap.values()]
+    .sort((left, right) => right.units - left.units)
+    .slice(0, 10);
+  const images = await fetchItemImages(
+    accessToken,
+    topSkus.map((item) => item.itemId),
+  );
+
+  return topSkus.map((item) => ({
+    ...item,
+    image: images.get(item.itemId) ?? null,
+  }));
+};
+
 export default async function handler(
   request: VercelRequest,
   response: VercelResponse,
@@ -188,6 +294,7 @@ export default async function handler(
       0,
     );
     const currencyId = orders.find((order) => order.currency_id)?.currency_id ?? "BRL";
+    const topSkus = await buildTopSkus(token.access_token, orders);
 
     response.setHeader("Set-Cookie", tokenCookie(token.refresh_token));
     response.status(200).json({
@@ -196,6 +303,7 @@ export default async function handler(
       orders: orders.length,
       revenue,
       currencyId,
+      topSkus,
     });
   } catch (error) {
     response.status(200).json({

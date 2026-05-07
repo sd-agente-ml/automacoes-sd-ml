@@ -38,6 +38,11 @@ type DailySummary = {
   orders: number;
   revenue: number;
   currencyId: string;
+  topSkus?: Array<{
+    sku: string;
+    image: string | null;
+    units: number;
+  }>;
   message?: string;
 };
 
@@ -128,7 +133,7 @@ function App() {
     const shippingRate = Math.round((sentOrders / paidOrders) * 100);
 
     return {
-      totalOrders,
+      totalOrders: dailySummary?.connected ? dailySummary.orders : totalOrders,
       revenue: dailySummary?.connected ? dailySummary.revenue : fallbackRevenue,
       shippingRate,
       alerts: alerts.length,
@@ -260,9 +265,13 @@ function App() {
 
         <section className="metrics-grid" aria-label="Indicadores principais">
           <article className="metric-card">
-            <span>Pedidos hoje</span>
-            <strong>{metrics.totalOrders}</strong>
-            <small>Pagos e em processamento</small>
+            <span>Pedidos ontem</span>
+            <strong>{isLoadingSummary ? "..." : metrics.totalOrders}</strong>
+            <small>
+              {dailySummary?.connected
+                ? `Pedidos pagos em ${dailySummary.date}`
+                : summaryError ?? "Pagos e em processamento"}
+            </small>
           </article>
           <article className="metric-card">
             <span>Faturamento ontem</span>
@@ -375,6 +384,36 @@ function App() {
                 <span>{alert.detail}</span>
               </article>
             ))}
+          </div>
+        </section>
+
+        <section className="wide-panel panel" id="top-skus">
+          <div className="panel-heading">
+            <h2>Top 10 SKUs ontem</h2>
+            <span>Unidades vendidas no dia anterior</span>
+          </div>
+          <div className="sku-grid">
+            {(dailySummary?.topSkus ?? []).length > 0 ? (
+              dailySummary?.topSkus?.map((item) => (
+                <article className="sku-item" key={item.sku}>
+                  <div className="sku-image">
+                    {item.image ? (
+                      <img src={item.image} alt="" loading="lazy" />
+                    ) : (
+                      <span>Sem imagem</span>
+                    )}
+                  </div>
+                  <strong>{item.sku}</strong>
+                  <span>{item.units} un vendidas</span>
+                </article>
+              ))
+            ) : (
+              <p className="empty-state">
+                {isLoadingSummary
+                  ? "Carregando SKUs..."
+                  : "Nenhum SKU vendido ontem ou conta ainda nao conectada."}
+              </p>
+            )}
           </div>
         </section>
       </main>
