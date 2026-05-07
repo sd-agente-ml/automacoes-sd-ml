@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type OrderStatus = "ok" | "warn" | "error";
 
@@ -29,6 +29,15 @@ type ConnectionStatus = {
   nickname?: string;
   siteId?: string;
   id?: number;
+  message?: string;
+};
+
+type DailySummary = {
+  connected: boolean;
+  date: string;
+  orders: number;
+  revenue: number;
+  currencyId: string;
   message?: string;
 };
 
@@ -105,11 +114,14 @@ const formatUpdateTime = () =>
 function App() {
   const [lastUpdated, setLastUpdated] = useState(formatUpdateTime);
   const [connection, setConnection] = useState<ConnectionStatus | null>(null);
+  const [dailySummary, setDailySummary] = useState<DailySummary | null>(null);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
+  const [isLoadingSummary, setIsLoadingSummary] = useState(true);
   const [isChecking, setIsChecking] = useState(false);
 
   const metrics = useMemo(() => {
     const totalOrders = operationRows.reduce((sum, item) => sum + item.orders, 0);
-    const revenue = operationRows.reduce((sum, item) => sum + item.revenue, 0);
+    const fallbackRevenue = operationRows.reduce((sum, item) => sum + item.revenue, 0);
     const sentOrders = funnel.find((item) => item.label === "Enviados")?.value ?? 0;
     const paidOrders =
       funnel.find((item) => item.label === "Pedidos pagos")?.value ?? 1;
@@ -117,17 +129,36 @@ function App() {
 
     return {
       totalOrders,
-      revenue,
+      revenue: dailySummary?.connected ? dailySummary.revenue : fallbackRevenue,
       shippingRate,
       alerts: alerts.length,
     };
-  }, []);
+  }, [dailySummary]);
 
   const formattedRevenue = new Intl.NumberFormat("pt-BR", {
     style: "currency",
-    currency: "BRL",
+    currency: dailySummary?.currencyId ?? "BRL",
     maximumFractionDigits: 0,
   }).format(metrics.revenue);
+
+  useEffect(() => {
+    fetch("/api/meli/daily-summary")
+      .then(async (response) => {
+        const payload = (await response.json()) as DailySummary;
+
+        if (!response.ok || !payload.connected) {
+          throw new Error(payload.message ?? "Resumo Mercado Livre indisponivel.");
+        }
+
+        setDailySummary(payload);
+      })
+      .catch((error: Error) => {
+        setSummaryError(error.message);
+      })
+      .finally(() => {
+        setIsLoadingSummary(false);
+      });
+  }, []);
 
   const startMercadoLivreAuth = async () => {
     const response = await fetch("/api/meli/auth-url");
@@ -234,9 +265,13 @@ function App() {
             <small>Pagos e em processamento</small>
           </article>
           <article className="metric-card">
-            <span>Faturamento</span>
-            <strong>{formattedRevenue}</strong>
-            <small>Receita bruta estimada</small>
+            <span>Faturamento ontem</span>
+            <strong>{isLoadingSummary ? "..." : formattedRevenue}</strong>
+            <small>
+              {dailySummary?.connected
+                ? `${dailySummary.orders} pedidos pagos em ${dailySummary.date}`
+                : summaryError ?? "Receita bruta estimada"}
+            </small>
           </article>
           <article className="metric-card">
             <span>Pedidos enviados</span>
