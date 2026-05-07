@@ -1,17 +1,19 @@
 :root {
   color-scheme: light;
-  --bg: #f5f7fb;
+  --bg: #f3f5f8;
   --surface: #ffffff;
-  --surface-muted: #eef3f7;
-  --text: #17202a;
-  --muted: #667385;
-  --line: #dce4ec;
-  --accent: #137c72;
-  --accent-strong: #0d5f57;
-  --warning: #bf6b04;
+  --surface-muted: #edf1f5;
+  --text: #1c2430;
+  --muted: #697586;
+  --line: #dbe2ea;
+  --accent: #0b6f6a;
+  --accent-strong: #075a56;
+  --warning: #a75d05;
   --danger: #b42318;
-  --success: #16803c;
-  --shadow: 0 16px 38px rgba(23, 32, 42, 0.08);
+  --success: #16743d;
+  --yellow: #ffe600;
+  --nav: #142332;
+  --shadow: 0 16px 34px rgba(28, 36, 48, 0.08);
 }
 
 * {
@@ -31,7 +33,7 @@ body {
 .sidebar {
   min-height: 100vh;
   padding: 24px 18px;
-  background: #10212f;
+  background: var(--nav);
   color: #f7fbff;
 }
 
@@ -49,8 +51,9 @@ body {
   height: 44px;
   place-items: center;
   border-radius: 8px;
-  background: var(--accent);
-  font-weight: 800;
+  background: var(--yellow);
+  color: #272200;
+  font-weight: 900;
 }
 
 .brand strong,
@@ -114,6 +117,12 @@ h1 {
   line-height: 1.1;
 }
 
+.subtitle {
+  max-width: 720px;
+  margin: 10px 0 0;
+  color: var(--muted);
+}
+
 h2 {
   margin-bottom: 0;
   font-size: 1rem;
@@ -162,7 +171,8 @@ h2 {
 .metric-card strong {
   display: block;
   margin: 10px 0 7px;
-  font-size: 2rem;
+  font-size: 1.85rem;
+  line-height: 1.1;
 }
 
 .metric-card.warning strong {
@@ -244,6 +254,7 @@ th {
 
 .alert-list {
   display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
   padding: 18px;
 }
@@ -260,10 +271,61 @@ th {
   display: block;
 }
 
+.alert-level {
+  width: max-content;
+  margin-bottom: 10px;
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: #fff3df;
+  color: var(--warning);
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
 .alert-item span {
   margin-top: 6px;
   color: var(--muted);
   font-size: 0.9rem;
+}
+
+.funnel-list {
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+}
+
+.funnel-item {
+  display: grid;
+  gap: 10px;
+}
+
+.funnel-item strong,
+.funnel-item span {
+  display: block;
+}
+
+.funnel-item span {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.progress {
+  height: 9px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--surface-muted);
+}
+
+.progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+}
+
+.wide-panel {
+  margin-top: 18px;
 }
 
 @media (max-width: 980px) {
@@ -282,6 +344,10 @@ th {
   .metrics-grid,
   .content-grid {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .alert-list {
+    grid-template-columns: 1fr;
   }
 
   .content-grid .panel:first-child {

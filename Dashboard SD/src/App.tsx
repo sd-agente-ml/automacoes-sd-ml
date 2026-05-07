@@ -1,60 +1,91 @@
 import { useMemo, useState } from "react";
 
-type AutomationStatus = "ok" | "warn" | "error";
+type OrderStatus = "ok" | "warn" | "error";
 
-type Automation = {
-  name: string;
-  status: AutomationStatus;
+type OperationRow = {
+  channel: string;
+  status: OrderStatus;
   label: string;
-  lastRun: string;
+  orders: number;
+  revenue: number;
+  sla: string;
   owner: string;
 };
 
 type Alert = {
   title: string;
   detail: string;
+  level: "Atencao" | "Critico";
 };
 
-const automations: Automation[] = [
+type FunnelStage = {
+  label: string;
+  value: number;
+  target: number;
+};
+
+const operationRows: OperationRow[] = [
   {
-    name: "Coleta de dados SD",
+    channel: "Full",
     status: "ok",
-    label: "Ativa",
-    lastRun: "Hoje, 09:12",
+    label: "No prazo",
+    orders: 284,
+    revenue: 87240,
+    sla: "98,4%",
+    owner: "Logistica",
+  },
+  {
+    channel: "Flex",
+    status: "warn",
+    label: "Fila alta",
+    orders: 126,
+    revenue: 38910,
+    sla: "91,2%",
+    owner: "Expedicao",
+  },
+  {
+    channel: "Coleta",
+    status: "ok",
+    label: "Estavel",
+    orders: 74,
+    revenue: 22180,
+    sla: "96,8%",
     owner: "Operacao",
   },
   {
-    name: "Atualizacao ML",
-    status: "warn",
-    label: "Atencao",
-    lastRun: "Hoje, 08:47",
-    owner: "Dados",
-  },
-  {
-    name: "Relatorio executivo",
-    status: "ok",
-    label: "Ativa",
-    lastRun: "Ontem, 18:20",
-    owner: "Gestao",
-  },
-  {
-    name: "Validacao de entradas",
+    channel: "Pendencias",
     status: "error",
-    label: "Falha",
-    lastRun: "Hoje, 07:30",
-    owner: "Suporte",
+    label: "Revisar",
+    orders: 18,
+    revenue: 6420,
+    sla: "76,5%",
+    owner: "Atendimento",
   },
 ];
 
 const alerts: Alert[] = [
   {
-    title: "Validacao de entradas falhou",
-    detail: "Revisar arquivo de origem antes da proxima execucao.",
+    title: "Pedidos Flex perto do limite de corte",
+    detail: "126 pedidos aguardam separacao antes da proxima janela.",
+    level: "Atencao",
   },
   {
-    title: "Atualizacao ML com atraso",
-    detail: "Fila aguardando nova janela de processamento.",
+    title: "18 pedidos com pendencia operacional",
+    detail: "Priorizar NF, etiqueta ou resposta ao comprador.",
+    level: "Critico",
   },
+  {
+    title: "Reputacao em observacao",
+    detail: "Atrasos de envio podem afetar a barra de qualidade.",
+    level: "Atencao",
+  },
+];
+
+const funnel: FunnelStage[] = [
+  { label: "Visitas", value: 18420, target: 20000 },
+  { label: "Carrinhos", value: 1290, target: 1500 },
+  { label: "Pedidos pagos", value: 502, target: 560 },
+  { label: "Enviados", value: 466, target: 520 },
 ];
 
 const formatUpdateTime = () =>
@@ -67,25 +98,35 @@ function App() {
   const [lastUpdated, setLastUpdated] = useState(formatUpdateTime);
 
   const metrics = useMemo(() => {
-    const active = automations.filter((item) => item.status === "ok").length;
-    const successRate = Math.round((active / automations.length) * 100);
+    const totalOrders = operationRows.reduce((sum, item) => sum + item.orders, 0);
+    const revenue = operationRows.reduce((sum, item) => sum + item.revenue, 0);
+    const sentOrders = funnel.find((item) => item.label === "Enviados")?.value ?? 0;
+    const paidOrders =
+      funnel.find((item) => item.label === "Pedidos pagos")?.value ?? 1;
+    const shippingRate = Math.round((sentOrders / paidOrders) * 100);
 
     return {
-      active,
-      runsToday: 128,
-      successRate,
+      totalOrders,
+      revenue,
+      shippingRate,
       alerts: alerts.length,
     };
   }, []);
+
+  const formattedRevenue = new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+    maximumFractionDigits: 0,
+  }).format(metrics.revenue);
 
   return (
     <>
       <aside className="sidebar" aria-label="Navegacao principal">
         <div className="brand">
-          <span className="brand-mark">SD</span>
+          <span className="brand-mark">ML</span>
           <div>
-            <strong>Dashboard SD</strong>
-            <small>Automacoes ML</small>
+            <strong>Operacao Mercado Livre</strong>
+            <small>Dashboard SD</small>
           </div>
         </div>
 
@@ -93,11 +134,11 @@ function App() {
           <a className="nav-item active" href="#visao-geral">
             Visao geral
           </a>
-          <a className="nav-item" href="#automacoes">
-            Automacoes
+          <a className="nav-item" href="#pedidos">
+            Pedidos
           </a>
-          <a className="nav-item" href="#execucoes">
-            Execucoes
+          <a className="nav-item" href="#funil">
+            Funil
           </a>
           <a className="nav-item" href="#alertas">
             Alertas
@@ -108,8 +149,12 @@ function App() {
       <main className="page" id="visao-geral">
         <header className="topbar">
           <div>
-            <p className="eyebrow">Operacao</p>
-            <h1>Central de automacoes</h1>
+            <p className="eyebrow">Mercado Livre</p>
+            <h1>Painel diario da operacao</h1>
+            <p className="subtitle">
+              Pedidos, receita, SLA de envio e pontos de atencao em uma visao
+              unica.
+            </p>
           </div>
           <button
             className="primary-action"
@@ -122,53 +167,63 @@ function App() {
 
         <section className="metrics-grid" aria-label="Indicadores principais">
           <article className="metric-card">
-            <span>Automacoes ativas</span>
-            <strong>{metrics.active}</strong>
-            <small>Fluxos monitorados</small>
+            <span>Pedidos hoje</span>
+            <strong>{metrics.totalOrders}</strong>
+            <small>Pagos e em processamento</small>
           </article>
           <article className="metric-card">
-            <span>Execucoes hoje</span>
-            <strong>{metrics.runsToday}</strong>
-            <small>Processos concluidos</small>
+            <span>Faturamento</span>
+            <strong>{formattedRevenue}</strong>
+            <small>Receita bruta estimada</small>
           </article>
           <article className="metric-card">
-            <span>Taxa de sucesso</span>
-            <strong>{metrics.successRate}%</strong>
-            <small>Ultimas 24 horas</small>
+            <span>Pedidos enviados</span>
+            <strong>{metrics.shippingRate}%</strong>
+            <small>Sobre pedidos pagos</small>
           </article>
           <article className="metric-card warning">
-            <span>Alertas</span>
+            <span>Alertas abertos</span>
             <strong>{metrics.alerts}</strong>
-            <small>Pendentes de revisao</small>
+            <small>Precisam de acao</small>
           </article>
         </section>
 
         <section className="content-grid">
-          <article className="panel" id="automacoes">
+          <article className="panel" id="pedidos">
             <div className="panel-heading">
-              <h2>Automacoes</h2>
+              <h2>Operacao por canal</h2>
               <span>Atualizado as {lastUpdated}</span>
             </div>
             <div className="table-wrap">
               <table>
                 <thead>
                   <tr>
-                    <th>Nome</th>
+                    <th>Canal</th>
                     <th>Status</th>
-                    <th>Ultima execucao</th>
+                    <th>Pedidos</th>
+                    <th>Receita</th>
+                    <th>SLA</th>
                     <th>Responsavel</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {automations.map((item) => (
-                    <tr key={item.name}>
-                      <td>{item.name}</td>
+                  {operationRows.map((item) => (
+                    <tr key={item.channel}>
+                      <td>{item.channel}</td>
                       <td>
                         <span className={`status ${item.status}`}>
                           {item.label}
                         </span>
                       </td>
-                      <td>{item.lastRun}</td>
+                      <td>{item.orders}</td>
+                      <td>
+                        {new Intl.NumberFormat("pt-BR", {
+                          style: "currency",
+                          currency: "BRL",
+                          maximumFractionDigits: 0,
+                        }).format(item.revenue)}
+                      </td>
+                      <td>{item.sla}</td>
                       <td>{item.owner}</td>
                     </tr>
                   ))}
@@ -177,19 +232,53 @@ function App() {
             </div>
           </article>
 
-          <aside className="panel" id="alertas">
+          <aside className="panel" id="funil">
             <div className="panel-heading">
-              <h2>Fila de alertas</h2>
+              <h2>Funil comercial</h2>
             </div>
-            <div className="alert-list">
-              {alerts.map((alert) => (
-                <article className="alert-item" key={alert.title}>
-                  <strong>{alert.title}</strong>
-                  <span>{alert.detail}</span>
+            <div className="funnel-list">
+              {funnel.map((stage) => (
+                <article className="funnel-item" key={stage.label}>
+                  <div>
+                    <strong>{stage.label}</strong>
+                    <span>
+                      {stage.value.toLocaleString("pt-BR")} de{" "}
+                      {stage.target.toLocaleString("pt-BR")}
+                    </span>
+                  </div>
+                  <div
+                    className="progress"
+                    aria-label={`${stage.label}: ${stage.value} de ${stage.target}`}
+                  >
+                    <span
+                      style={{
+                        width: `${Math.min(
+                          Math.round((stage.value / stage.target) * 100),
+                          100,
+                        )}%`,
+                      }}
+                    />
+                  </div>
                 </article>
               ))}
             </div>
           </aside>
+        </section>
+
+        <section className="wide-panel panel" id="alertas">
+          <div className="panel-heading">
+            <h2>Alertas operacionais</h2>
+            <span>Prioridade do dia</span>
+          </div>
+          <div className="alert-list">
+            {alerts.map((alert) => (
+              <article className="alert-item" key={alert.title}>
+                <span className="alert-level">{alert.level}</span>
+                <strong>{alert.title}</strong>
+                <span>{alert.detail}</span>
+              </article>
+            ))}
+          </div>
         </section>
       </main>
     </>

@@ -1,6 +1,8 @@
-# Dashboard SD
+# Dashboard SD - Mercado Livre
 
-Projeto web do Dashboard SD criado com Vite, React e TypeScript.
+Site operacional para acompanhar dados da operacao de Mercado Livre. A base
+usa Vite, React e TypeScript, pronta para deploy pela Vercel conectado ao
+GitHub.
 
 ## Scripts
 
@@ -8,6 +10,15 @@ Projeto web do Dashboard SD criado com Vite, React e TypeScript.
 - `npm run build`: valida TypeScript e gera a versao de producao.
 - `npm run lint`: roda ESLint.
 - `npm run preview`: abre a build de producao localmente.
+
+## Deploy na Vercel
+
+Ao importar o repositorio `sd-agente-ml/automacoes-sd-ml`, selecione
+`Dashboard SD` como root directory.
+
+- Framework: Vite
+- Build command: `npm run build`
+- Output directory: `dist`
 
 ## Estrutura
 
