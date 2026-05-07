@@ -24,6 +24,14 @@ type FunnelStage = {
   target: number;
 };
 
+type ConnectionStatus = {
+  connected: boolean;
+  nickname?: string;
+  siteId?: string;
+  id?: number;
+  message?: string;
+};
+
 const operationRows: OperationRow[] = [
   {
     channel: "Full",
@@ -96,6 +104,8 @@ const formatUpdateTime = () =>
 
 function App() {
   const [lastUpdated, setLastUpdated] = useState(formatUpdateTime);
+  const [connection, setConnection] = useState<ConnectionStatus | null>(null);
+  const [isChecking, setIsChecking] = useState(false);
 
   const metrics = useMemo(() => {
     const totalOrders = operationRows.reduce((sum, item) => sum + item.orders, 0);
@@ -118,6 +128,23 @@ function App() {
     currency: "BRL",
     maximumFractionDigits: 0,
   }).format(metrics.revenue);
+
+  const startMercadoLivreAuth = async () => {
+    const response = await fetch("/api/meli/auth-url");
+    const payload = (await response.json()) as { authUrl: string };
+    window.location.href = payload.authUrl;
+  };
+
+  const checkConnection = async () => {
+    setIsChecking(true);
+    try {
+      const response = await fetch("/api/meli/me");
+      const payload = (await response.json()) as ConnectionStatus;
+      setConnection(payload);
+    } finally {
+      setIsChecking(false);
+    }
+  };
 
   return (
     <>
@@ -164,6 +191,41 @@ function App() {
             Atualizar
           </button>
         </header>
+
+        <section className="connection-panel panel">
+          <div>
+            <p className="eyebrow">Integracao</p>
+            <h2>Conta Mercado Livre</h2>
+            <p>
+              Conecte a conta para trocar os indicadores mockados por dados reais
+              da operacao.
+            </p>
+          </div>
+          <div className="connection-actions">
+            <button
+              className="secondary-action"
+              type="button"
+              onClick={checkConnection}
+              disabled={isChecking}
+            >
+              {isChecking ? "Verificando" : "Verificar conexao"}
+            </button>
+            <button
+              className="primary-action"
+              type="button"
+              onClick={startMercadoLivreAuth}
+            >
+              Conectar Mercado Livre
+            </button>
+          </div>
+          {connection ? (
+            <div className={connection.connected ? "notice ok" : "notice warn"}>
+              {connection.connected
+                ? `Conectado: ${connection.nickname} (${connection.siteId})`
+                : connection.message}
+            </div>
+          ) : null}
+        </section>
 
         <section className="metrics-grid" aria-label="Indicadores principais">
           <article className="metric-card">
