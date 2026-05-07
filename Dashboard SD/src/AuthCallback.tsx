@@ -35,7 +35,7 @@ function AuthCallback() {
           status: "success",
           message:
             payload.message ??
-            "Conta conectada. As credenciais foram validadas com sucesso.",
+            "Conta conectada. O dashboard ja pode consultar sua operacao.",
         });
       })
       .catch((error: Error) => {

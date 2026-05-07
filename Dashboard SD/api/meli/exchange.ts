@@ -16,6 +16,16 @@ type TokenResponse = {
   user_id: number;
 };
 
+const refreshCookie = (token: string) =>
+  [
+    `meli_refresh_token=${encodeURIComponent(token)}`,
+    "Path=/",
+    "HttpOnly",
+    "Secure",
+    "SameSite=Lax",
+    "Max-Age=15552000",
+  ].join("; ");
+
 export default async function handler(
   request: VercelRequest,
   response: VercelResponse,
@@ -64,11 +74,12 @@ export default async function handler(
       return;
     }
 
+    const tokens = tokenPayload as TokenResponse;
+
+    response.setHeader("Set-Cookie", refreshCookie(tokens.refresh_token));
     response.status(200).json({
-      message:
-        "Autorizacao concluida. Copie o refresh_token do log local e salve como MELI_REFRESH_TOKEN na Vercel para chamadas automaticas.",
-      userId: (tokenPayload as TokenResponse).user_id,
-      refreshToken: (tokenPayload as TokenResponse).refresh_token,
+      message: "Conta conectada. O dashboard ja pode consultar sua operacao.",
+      userId: tokens.user_id,
     });
   } catch (error) {
     response.status(500).json({
