@@ -3,5 +3,11 @@
   "devCommand": "npm run dev",
   "framework": "vite",
   "installCommand": "npm install",
-  "outputDirectory": "dist"
+  "outputDirectory": "dist",
+  "rewrites": [
+    {
+      "source": "/auth/callback",
+      "destination": "/index.html"
+    }
+  ]
 }
