@@ -29,7 +29,25 @@ type DailySummary = {
   message?: string;
 };
 
-type ActiveView = "overview" | "integration";
+type ActiveView = "overview" | "purchases" | "integration";
+
+type PurchaseSuggestion = {
+  sku: string;
+  title: string;
+  image: string | null;
+  unitsSold30d: number;
+  currentStock: number;
+  targetStock: number;
+  suggestedPurchase: number;
+};
+
+type PurchaseSuggestionsResponse = {
+  connected: boolean;
+  fromDate: string;
+  toDate: string;
+  suggestions: PurchaseSuggestion[];
+  message?: string;
+};
 
 const formatUpdateTime = () =>
   new Intl.DateTimeFormat("pt-BR", {
@@ -43,6 +61,10 @@ function App() {
   const [connection, setConnection] = useState<ConnectionStatus | null>(null);
   const [dailySummary, setDailySummary] = useState<DailySummary | null>(null);
   const [summaryError, setSummaryError] = useState<string | null>(null);
+  const [purchaseData, setPurchaseData] =
+    useState<PurchaseSuggestionsResponse | null>(null);
+  const [purchaseError, setPurchaseError] = useState<string | null>(null);
+  const [isLoadingPurchases, setIsLoadingPurchases] = useState(false);
   const [isLoadingSummary, setIsLoadingSummary] = useState(true);
   const [isChecking, setIsChecking] = useState(false);
 
@@ -93,6 +115,30 @@ function App() {
       });
   }, []);
 
+  const loadPurchaseSuggestions = () => {
+    if (purchaseData || isLoadingPurchases) {
+      return;
+    }
+
+    setIsLoadingPurchases(true);
+    fetch("/api/meli/purchase-suggestions")
+      .then(async (response) => {
+        const payload = (await response.json()) as PurchaseSuggestionsResponse;
+
+        if (!response.ok || !payload.connected) {
+          throw new Error(payload.message ?? "Sugestoes de compra indisponiveis.");
+        }
+
+        setPurchaseData(payload);
+      })
+      .catch((error: Error) => {
+        setPurchaseError(error.message);
+      })
+      .finally(() => {
+        setIsLoadingPurchases(false);
+      });
+  };
+
   const startMercadoLivreAuth = async () => {
     const response = await fetch("/api/meli/auth-url");
     const payload = (await response.json()) as { authUrl: string };
@@ -130,6 +176,16 @@ function App() {
             Visao geral
           </button>
           <button
+            className={`nav-item ${activeView === "purchases" ? "active" : ""}`}
+            type="button"
+            onClick={() => {
+              setActiveView("purchases");
+              loadPurchaseSuggestions();
+            }}
+          >
+            Compras
+          </button>
+          <button
             className={`nav-item ${activeView === "integration" ? "active" : ""}`}
             type="button"
             onClick={() => setActiveView("integration")}
@@ -146,11 +202,15 @@ function App() {
             <h1>
               {activeView === "overview"
                 ? "Painel diario da operacao"
+                : activeView === "purchases"
+                  ? "Sugestao de compras"
                 : "Integracao Mercado Livre"}
             </h1>
             <p className="subtitle">
               {activeView === "overview"
                 ? "Pedidos, faturamento e principais SKUs vendidos no dia anterior."
+                : activeView === "purchases"
+                  ? "Reposicao sugerida para cada SKU com base nos ultimos 30 dias completos."
                 : "Conexao da conta usada para carregar os dados reais do dashboard."}
             </p>
           </div>
@@ -234,6 +294,64 @@ function App() {
               </div>
             </section>
           </>
+        ) : activeView === "purchases" ? (
+          <section className="wide-panel panel">
+            <div className="panel-heading">
+              <h2>Compras sugeridas</h2>
+              <span>
+                {purchaseData
+                  ? `${purchaseData.fromDate} a ${purchaseData.toDate}`
+                  : "Base: ultimos 30 dias completos"}
+              </span>
+            </div>
+            <div className="purchase-table-wrap">
+              <table className="purchase-table">
+                <thead>
+                  <tr>
+                    <th>Imagem</th>
+                    <th>SKU</th>
+                    <th>Vendas 30d</th>
+                    <th>Estoque ML</th>
+                    <th>Estoque alvo</th>
+                    <th>Sugestao compra</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {purchaseData?.suggestions.map((item) => (
+                    <tr key={`${item.sku}-${item.title}`}>
+                      <td>
+                        <div className="purchase-image">
+                          {item.image ? (
+                            <img src={item.image} alt="" loading="lazy" />
+                          ) : (
+                            <span>Sem imagem</span>
+                          )}
+                        </div>
+                      </td>
+                      <td>
+                        <strong>{item.sku}</strong>
+                        <span>{item.title}</span>
+                      </td>
+                      <td>{item.unitsSold30d}</td>
+                      <td>{item.currentStock}</td>
+                      <td>{item.targetStock}</td>
+                      <td>
+                        <strong>{item.suggestedPurchase}</strong>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {isLoadingPurchases || !purchaseData?.suggestions.length ? (
+                <p className="empty-state purchase-empty">
+                  {isLoadingPurchases
+                    ? "Calculando sugestoes..."
+                    : purchaseError ??
+                      "Nenhuma venda encontrada nos ultimos 30 dias completos."}
+                </p>
+              ) : null}
+            </div>
+          </section>
         ) : (
           <section className="connection-panel panel">
             <div>
