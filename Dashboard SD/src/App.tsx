@@ -29,6 +29,8 @@ type DailySummary = {
   message?: string;
 };
 
+type ActiveView = "overview" | "integration";
+
 const formatUpdateTime = () =>
   new Intl.DateTimeFormat("pt-BR", {
     hour: "2-digit",
@@ -36,6 +38,7 @@ const formatUpdateTime = () =>
   }).format(new Date());
 
 function App() {
+  const [activeView, setActiveView] = useState<ActiveView>("overview");
   const [lastUpdated, setLastUpdated] = useState(formatUpdateTime);
   const [connection, setConnection] = useState<ConnectionStatus | null>(null);
   const [dailySummary, setDailySummary] = useState<DailySummary | null>(null);
@@ -119,129 +122,154 @@ function App() {
         </div>
 
         <nav className="nav-list">
-          <a className="nav-item active" href="#visao-geral">
+          <button
+            className={`nav-item ${activeView === "overview" ? "active" : ""}`}
+            type="button"
+            onClick={() => setActiveView("overview")}
+          >
             Visao geral
-          </a>
+          </button>
+          <button
+            className={`nav-item ${activeView === "integration" ? "active" : ""}`}
+            type="button"
+            onClick={() => setActiveView("integration")}
+          >
+            Integracao ML
+          </button>
         </nav>
       </aside>
 
-      <main className="page" id="visao-geral">
+      <main className="page">
         <header className="topbar">
           <div>
             <p className="eyebrow">Mercado Livre</p>
-            <h1>Painel diario da operacao</h1>
+            <h1>
+              {activeView === "overview"
+                ? "Painel diario da operacao"
+                : "Integracao Mercado Livre"}
+            </h1>
             <p className="subtitle">
-              Pedidos, faturamento e principais SKUs vendidos no dia anterior.
+              {activeView === "overview"
+                ? "Pedidos, faturamento e principais SKUs vendidos no dia anterior."
+                : "Conexao da conta usada para carregar os dados reais do dashboard."}
             </p>
           </div>
-          <button
-            className="primary-action"
-            type="button"
-            onClick={() => setLastUpdated(formatUpdateTime())}
-          >
-            Atualizar
-          </button>
-        </header>
-        <p className="last-updated">Atualizado as {lastUpdated}</p>
-
-        <section className="connection-panel panel">
-          <div>
-            <p className="eyebrow">Integracao</p>
-            <h2>Conta Mercado Livre</h2>
-            <p>
-              Conecte a conta para trocar os indicadores mockados por dados reais
-              da operacao.
-            </p>
-          </div>
-          <div className="connection-actions">
-            <button
-              className="secondary-action"
-              type="button"
-              onClick={checkConnection}
-              disabled={isChecking}
-            >
-              {isChecking ? "Verificando" : "Verificar conexao"}
-            </button>
+          {activeView === "overview" ? (
             <button
               className="primary-action"
               type="button"
-              onClick={startMercadoLivreAuth}
+              onClick={() => setLastUpdated(formatUpdateTime())}
             >
-              Conectar Mercado Livre
+              Atualizar
             </button>
-          </div>
-          {connection ? (
-            <div className={connection.connected ? "notice ok" : "notice warn"}>
-              {connection.connected
-                ? `Conectado: ${connection.nickname} (${connection.siteId})`
-                : connection.message}
-            </div>
           ) : null}
-        </section>
+        </header>
 
-        <section className="metrics-grid" aria-label="Indicadores principais">
-          <article className="metric-card">
-            <span>Pedidos ontem</span>
-            <strong>{isLoadingSummary ? "..." : dailySummary?.orders ?? 0}</strong>
-            <small>
-              {dailySummary?.connected
-                ? `Pedidos pagos em ${dailySummary.date}`
-                : summaryError ?? "Pagos e em processamento"}
-            </small>
-          </article>
-          <article className="metric-card">
-            <span>Faturamento ontem</span>
-            <strong>{isLoadingSummary ? "..." : formattedRevenue}</strong>
-            <small>
-              {dailySummary?.connected
-                ? `${dailySummary.orders} pedidos pagos em ${dailySummary.date}`
-                : summaryError ?? "Receita bruta estimada"}
-            </small>
-          </article>
-          {shippingCards.map((card) => {
-            const summary = dailySummary?.shippingBreakdown?.[card.key];
-
-            return (
-              <article className="metric-card" key={card.key}>
-                <span>{card.title}</span>
-                <strong>
-                  {isLoadingSummary ? "..." : formatCurrency(summary?.revenue ?? 0)}
-                </strong>
-                <small>{summary?.orders ?? 0} pedidos pagos</small>
+        {activeView === "overview" ? (
+          <>
+            <p className="last-updated">Atualizado as {lastUpdated}</p>
+            <section className="metrics-grid" aria-label="Indicadores principais">
+              <article className="metric-card">
+                <span>Pedidos ontem</span>
+                <strong>{isLoadingSummary ? "..." : dailySummary?.orders ?? 0}</strong>
+                <small>
+                  {dailySummary?.connected
+                    ? `Pedidos pagos em ${dailySummary.date}`
+                    : summaryError ?? "Pagos e em processamento"}
+                </small>
               </article>
-            );
-          })}
-        </section>
+              <article className="metric-card">
+                <span>Faturamento ontem</span>
+                <strong>{isLoadingSummary ? "..." : formattedRevenue}</strong>
+                <small>
+                  {dailySummary?.connected
+                    ? `${dailySummary.orders} pedidos pagos em ${dailySummary.date}`
+                    : summaryError ?? "Receita bruta estimada"}
+                </small>
+              </article>
+              {shippingCards.map((card) => {
+                const summary = dailySummary?.shippingBreakdown?.[card.key];
 
-        <section className="wide-panel panel" id="top-skus">
-          <div className="panel-heading">
-            <h2>Top 10 SKUs ontem</h2>
-            <span>Unidades vendidas no dia anterior</span>
-          </div>
-          <div className="sku-grid">
-            {(dailySummary?.topSkus ?? []).length > 0 ? (
-              dailySummary?.topSkus?.map((item) => (
-                <article className="sku-item" key={item.sku}>
-                  <div className="sku-image">
-                    {item.image ? (
-                      <img src={item.image} alt="" loading="lazy" />
-                    ) : (
-                      <span>Sem imagem</span>
-                    )}
-                  </div>
-                  <strong>{item.sku}</strong>
-                  <span>{item.units} un vendidas</span>
-                </article>
-              ))
-            ) : (
-              <p className="empty-state">
-                {isLoadingSummary
-                  ? "Carregando SKUs..."
-                  : "Nenhum SKU vendido ontem ou conta ainda nao conectada."}
+                return (
+                  <article className="metric-card" key={card.key}>
+                    <span>{card.title}</span>
+                    <strong>
+                      {isLoadingSummary
+                        ? "..."
+                        : formatCurrency(summary?.revenue ?? 0)}
+                    </strong>
+                    <small>{summary?.orders ?? 0} pedidos pagos</small>
+                  </article>
+                );
+              })}
+            </section>
+
+            <section className="wide-panel panel" id="top-skus">
+              <div className="panel-heading">
+                <h2>Top 10 SKUs ontem</h2>
+                <span>Unidades vendidas no dia anterior</span>
+              </div>
+              <div className="sku-grid">
+                {(dailySummary?.topSkus ?? []).length > 0 ? (
+                  dailySummary?.topSkus?.map((item) => (
+                    <article className="sku-item" key={item.sku}>
+                      <div className="sku-image">
+                        {item.image ? (
+                          <img src={item.image} alt="" loading="lazy" />
+                        ) : (
+                          <span>Sem imagem</span>
+                        )}
+                      </div>
+                      <strong>{item.sku}</strong>
+                      <span>{item.units} un vendidas</span>
+                    </article>
+                  ))
+                ) : (
+                  <p className="empty-state">
+                    {isLoadingSummary
+                      ? "Carregando SKUs..."
+                      : "Nenhum SKU vendido ontem ou conta ainda nao conectada."}
+                  </p>
+                )}
+              </div>
+            </section>
+          </>
+        ) : (
+          <section className="connection-panel panel">
+            <div>
+              <p className="eyebrow">Integracao</p>
+              <h2>Conta Mercado Livre</h2>
+              <p>
+                Conecte a conta para trocar os indicadores mockados por dados
+                reais da operacao.
               </p>
-            )}
-          </div>
-        </section>
+            </div>
+            <div className="connection-actions">
+              <button
+                className="secondary-action"
+                type="button"
+                onClick={checkConnection}
+                disabled={isChecking}
+              >
+                {isChecking ? "Verificando" : "Verificar conexao"}
+              </button>
+              <button
+                className="primary-action"
+                type="button"
+                onClick={startMercadoLivreAuth}
+              >
+                Conectar Mercado Livre
+              </button>
+            </div>
+            {connection ? (
+              <div className={connection.connected ? "notice ok" : "notice warn"}>
+                {connection.connected
+                  ? `Conectado: ${connection.nickname} (${connection.siteId})`
+                  : connection.message}
+              </div>
+            ) : null}
+          </section>
+        )}
       </main>
     </>
   );
