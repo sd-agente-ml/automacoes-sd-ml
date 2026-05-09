@@ -43,6 +43,13 @@ type DailySummary = {
     image: string | null;
     units: number;
   }>;
+  shippingBreakdown?: Record<
+    "flex" | "full" | "mercadoEnvios",
+    {
+      orders: number;
+      revenue: number;
+    }
+  >;
   message?: string;
 };
 
@@ -145,6 +152,28 @@ function App() {
     currency: dailySummary?.currencyId ?? "BRL",
     maximumFractionDigits: 0,
   }).format(metrics.revenue);
+
+  const formatCurrency = (value: number) =>
+    new Intl.NumberFormat("pt-BR", {
+      style: "currency",
+      currency: dailySummary?.currencyId ?? "BRL",
+      maximumFractionDigits: 0,
+    }).format(value);
+
+  const shippingCards = [
+    {
+      title: "Flex ontem",
+      key: "flex" as const,
+    },
+    {
+      title: "Full ontem",
+      key: "full" as const,
+    },
+    {
+      title: "Mercado Envios ontem",
+      key: "mercadoEnvios" as const,
+    },
+  ];
 
   useEffect(() => {
     fetch("/api/meli/daily-summary")
@@ -282,16 +311,19 @@ function App() {
                 : summaryError ?? "Receita bruta estimada"}
             </small>
           </article>
-          <article className="metric-card">
-            <span>Pedidos enviados</span>
-            <strong>{metrics.shippingRate}%</strong>
-            <small>Sobre pedidos pagos</small>
-          </article>
-          <article className="metric-card warning">
-            <span>Alertas abertos</span>
-            <strong>{metrics.alerts}</strong>
-            <small>Precisam de acao</small>
-          </article>
+          {shippingCards.map((card) => {
+            const summary = dailySummary?.shippingBreakdown?.[card.key];
+
+            return (
+              <article className="metric-card" key={card.key}>
+                <span>{card.title}</span>
+                <strong>
+                  {isLoadingSummary ? "..." : formatCurrency(summary?.revenue ?? 0)}
+                </strong>
+                <small>{summary?.orders ?? 0} pedidos pagos</small>
+              </article>
+            );
+          })}
         </section>
 
         <section className="content-grid">

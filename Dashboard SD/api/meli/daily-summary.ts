@@ -14,6 +14,10 @@ type Order = {
   paid_amount?: number;
   total_amount?: number;
   currency_id?: string;
+  shipping?: {
+    id?: number;
+    logistic_type?: string | null;
+  };
   order_items?: Array<{
     quantity?: number;
     item?: {
@@ -52,6 +56,18 @@ type TopSku = {
   sku: string;
   image: string | null;
   units: number;
+};
+
+type ShippingGroup = "flex" | "full" | "mercadoEnvios";
+
+type ShippingSummary = {
+  orders: number;
+  revenue: number;
+};
+
+type ShipmentResponse = {
+  id: number;
+  logistic_type?: string | null;
 };
 
 const requiredEnv = (name: string) => {
@@ -253,6 +269,74 @@ const buildTopSkus = async (accessToken: string, orders: Order[]) => {
   }));
 };
 
+const getOrderAmount = (order: Order) => order.paid_amount ?? order.total_amount ?? 0;
+
+const fetchShipmentLogisticType = async (
+  accessToken: string,
+  shipmentId: number,
+) => {
+  const response = await fetch(
+    `https://api.mercadolibre.com/shipments/${shipmentId}`,
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    },
+  );
+
+  if (!response.ok) {
+    return undefined;
+  }
+
+  const shipment = (await response.json()) as ShipmentResponse;
+
+  return shipment.logistic_type ?? undefined;
+};
+
+const classifyLogisticType = (logisticType: string | undefined): ShippingGroup => {
+  if (logisticType === "self_service") {
+    return "flex";
+  }
+
+  if (logisticType === "fulfillment") {
+    return "full";
+  }
+
+  return "mercadoEnvios";
+};
+
+const buildShippingBreakdown = async (accessToken: string, orders: Order[]) => {
+  const shipmentTypeCache = new Map<number, string | undefined>();
+  const breakdown: Record<ShippingGroup, ShippingSummary> = {
+    flex: { orders: 0, revenue: 0 },
+    full: { orders: 0, revenue: 0 },
+    mercadoEnvios: { orders: 0, revenue: 0 },
+  };
+
+  for (const order of orders) {
+    let logisticType = order.shipping?.logistic_type ?? undefined;
+    const shipmentId = order.shipping?.id;
+
+    if (!logisticType && shipmentId) {
+      if (!shipmentTypeCache.has(shipmentId)) {
+        shipmentTypeCache.set(
+          shipmentId,
+          await fetchShipmentLogisticType(accessToken, shipmentId),
+        );
+      }
+
+      logisticType = shipmentTypeCache.get(shipmentId);
+    }
+
+    const group = classifyLogisticType(logisticType);
+
+    breakdown[group].orders += 1;
+    breakdown[group].revenue += getOrderAmount(order);
+  }
+
+  return breakdown;
+};
+
 export default async function handler(
   request: VercelRequest,
   response: VercelResponse,
@@ -289,12 +373,10 @@ export default async function handler(
       range.from,
       range.to,
     );
-    const revenue = orders.reduce(
-      (sum, order) => sum + (order.paid_amount ?? order.total_amount ?? 0),
-      0,
-    );
+    const revenue = orders.reduce((sum, order) => sum + getOrderAmount(order), 0);
     const currencyId = orders.find((order) => order.currency_id)?.currency_id ?? "BRL";
     const topSkus = await buildTopSkus(token.access_token, orders);
+    const shippingBreakdown = await buildShippingBreakdown(token.access_token, orders);
 
     response.setHeader("Set-Cookie", tokenCookie(token.refresh_token));
     response.status(200).json({
@@ -304,6 +386,7 @@ export default async function handler(
       revenue,
       currencyId,
       topSkus,
+      shippingBreakdown,
     });
   } catch (error) {
     response.status(200).json({
