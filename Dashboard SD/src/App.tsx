@@ -38,7 +38,7 @@ type AdsSummary = {
   message?: string;
 };
 
-type ActiveView = "overview" | "purchases" | "integration";
+type ActiveView = "overview" | "purchases" | "catalogs" | "integration";
 
 type PurchaseSuggestion = {
   sku: string;
@@ -55,6 +55,27 @@ type PurchaseSuggestionsResponse = {
   fromDate: string;
   toDate: string;
   suggestions: PurchaseSuggestion[];
+  message?: string;
+};
+
+type CatalogItem = {
+  id: string;
+  image: string | null;
+  sku: string;
+  title: string;
+  currentPrice: number;
+  currencyId: string;
+  status: "winning" | "competing" | "sharing_first_place" | "listed" | "unknown";
+  statusLabel: string;
+  priceToWin: number | null;
+  visits60d: number;
+};
+
+type CatalogsResponse = {
+  connected: boolean;
+  fromDate: string;
+  toDate: string;
+  items: CatalogItem[];
   message?: string;
 };
 
@@ -75,7 +96,10 @@ function App() {
   const [purchaseData, setPurchaseData] =
     useState<PurchaseSuggestionsResponse | null>(null);
   const [purchaseError, setPurchaseError] = useState<string | null>(null);
+  const [catalogData, setCatalogData] = useState<CatalogsResponse | null>(null);
+  const [catalogError, setCatalogError] = useState<string | null>(null);
   const [isLoadingPurchases, setIsLoadingPurchases] = useState(false);
+  const [isLoadingCatalogs, setIsLoadingCatalogs] = useState(false);
   const [isLoadingSummary, setIsLoadingSummary] = useState(true);
   const [isLoadingAds, setIsLoadingAds] = useState(true);
   const [isChecking, setIsChecking] = useState(false);
@@ -98,6 +122,13 @@ function App() {
       style: "currency",
       currency: adsSummary?.currencyId ?? dailySummary?.currencyId ?? "BRL",
       maximumFractionDigits: 0,
+    }).format(value);
+
+  const formatItemCurrency = (value: number, currency: string) =>
+    new Intl.NumberFormat("pt-BR", {
+      style: "currency",
+      currency,
+      maximumFractionDigits: 2,
     }).format(value);
 
   const formattedAcos = new Intl.NumberFormat("pt-BR", {
@@ -182,6 +213,30 @@ function App() {
       });
   };
 
+  const loadCatalogs = () => {
+    if (catalogData || isLoadingCatalogs) {
+      return;
+    }
+
+    setIsLoadingCatalogs(true);
+    fetch("/api/meli/catalogs")
+      .then(async (response) => {
+        const payload = (await response.json()) as CatalogsResponse;
+
+        if (!response.ok || !payload.connected) {
+          throw new Error(payload.message ?? "Catalogos indisponiveis.");
+        }
+
+        setCatalogData(payload);
+      })
+      .catch((error: Error) => {
+        setCatalogError(error.message);
+      })
+      .finally(() => {
+        setIsLoadingCatalogs(false);
+      });
+  };
+
   const startMercadoLivreAuth = async () => {
     const response = await fetch("/api/meli/auth-url");
     const payload = (await response.json()) as { authUrl: string };
@@ -229,6 +284,16 @@ function App() {
             Compras
           </button>
           <button
+            className={`nav-item ${activeView === "catalogs" ? "active" : ""}`}
+            type="button"
+            onClick={() => {
+              setActiveView("catalogs");
+              loadCatalogs();
+            }}
+          >
+            Catálogos
+          </button>
+          <button
             className={`nav-item ${activeView === "integration" ? "active" : ""}`}
             type="button"
             onClick={() => setActiveView("integration")}
@@ -247,14 +312,18 @@ function App() {
                 ? "Painel diario da operacao"
                 : activeView === "purchases"
                   ? "Sugestao de compras"
-                : "Integracao Mercado Livre"}
+                  : activeView === "catalogs"
+                    ? "Competicao de catalogos"
+                    : "Integracao Mercado Livre"}
             </h1>
             <p className="subtitle">
               {activeView === "overview"
                 ? "Pedidos, faturamento e principais SKUs vendidos no dia anterior."
                 : activeView === "purchases"
                   ? "Reposicao sugerida para cada SKU com base nos ultimos 30 dias completos."
-                : "Conexao da conta usada para carregar os dados reais do dashboard."}
+                  : activeView === "catalogs"
+                    ? "Anuncios de catalogo com visitas nos ultimos 60 dias, ordenados por status de competicao."
+                    : "Conexao da conta usada para carregar os dados reais do dashboard."}
             </p>
           </div>
           {activeView === "overview" ? (
@@ -400,6 +469,70 @@ function App() {
                     ? "Calculando sugestoes..."
                     : purchaseError ??
                       "Nenhuma venda encontrada nos ultimos 30 dias completos."}
+                </p>
+              ) : null}
+            </div>
+          </section>
+        ) : activeView === "catalogs" ? (
+          <section className="wide-panel panel">
+            <div className="panel-heading">
+              <h2>Catálogos em competição</h2>
+              <span>
+                {catalogData
+                  ? `${catalogData.fromDate} a ${catalogData.toDate}`
+                  : "Base: visitas dos ultimos 60 dias"}
+              </span>
+            </div>
+            <div className="purchase-table-wrap">
+              <table className="purchase-table catalog-table">
+                <thead>
+                  <tr>
+                    <th>Imagem</th>
+                    <th>SKU</th>
+                    <th>Titulo</th>
+                    <th>Preco atual</th>
+                    <th>Status</th>
+                    <th>Preco para ganhar</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {catalogData?.items.map((item) => (
+                    <tr key={item.id}>
+                      <td>
+                        <div className="purchase-image">
+                          {item.image ? (
+                            <img src={item.image} alt="" loading="lazy" />
+                          ) : (
+                            <span>Sem imagem</span>
+                          )}
+                        </div>
+                      </td>
+                      <td>
+                        <strong>{item.sku}</strong>
+                        <span>{item.visits60d} visitas em 60d</span>
+                      </td>
+                      <td>{item.title}</td>
+                      <td>{formatItemCurrency(item.currentPrice, item.currencyId)}</td>
+                      <td>
+                        <span className={`status-pill ${item.status}`}>
+                          {item.statusLabel}
+                        </span>
+                      </td>
+                      <td>
+                        {item.priceToWin === null
+                          ? "-"
+                          : formatItemCurrency(item.priceToWin, item.currencyId)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {isLoadingCatalogs || !catalogData?.items.length ? (
+                <p className="empty-state purchase-empty">
+                  {isLoadingCatalogs
+                    ? "Mapeando catalogos..."
+                    : catalogError ??
+                      "Nenhum catalogo com visitas nos ultimos 60 dias."}
                 </p>
               ) : null}
             </div>

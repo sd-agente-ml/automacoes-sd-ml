@@ -392,6 +392,46 @@ h2 {
   padding: 18px;
 }
 
+.catalog-table td:nth-child(2) {
+  min-width: 180px;
+}
+
+.catalog-table td:nth-child(3) {
+  min-width: 280px;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.status-pill.winning {
+  background: #e9f7ee;
+  color: var(--success);
+}
+
+.status-pill.competing {
+  background: #ffeceb;
+  color: var(--danger);
+}
+
+.status-pill.sharing_first_place {
+  background: #fff3df;
+  color: var(--warning);
+}
+
+.status-pill.listed,
+.status-pill.unknown {
+  background: var(--surface-muted);
+  color: var(--muted);
+}
+
 .callback-page {
   min-height: 100vh;
   display: grid;
