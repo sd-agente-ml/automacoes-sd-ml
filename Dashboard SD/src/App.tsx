@@ -29,6 +29,15 @@ type DailySummary = {
   message?: string;
 };
 
+type AdsSummary = {
+  connected: boolean;
+  date: string;
+  acos: number;
+  investment: number;
+  currencyId: string;
+  message?: string;
+};
+
 type ActiveView = "overview" | "purchases" | "integration";
 
 type PurchaseSuggestion = {
@@ -60,12 +69,15 @@ function App() {
   const [lastUpdated, setLastUpdated] = useState(formatUpdateTime);
   const [connection, setConnection] = useState<ConnectionStatus | null>(null);
   const [dailySummary, setDailySummary] = useState<DailySummary | null>(null);
+  const [adsSummary, setAdsSummary] = useState<AdsSummary | null>(null);
   const [summaryError, setSummaryError] = useState<string | null>(null);
+  const [adsError, setAdsError] = useState<string | null>(null);
   const [purchaseData, setPurchaseData] =
     useState<PurchaseSuggestionsResponse | null>(null);
   const [purchaseError, setPurchaseError] = useState<string | null>(null);
   const [isLoadingPurchases, setIsLoadingPurchases] = useState(false);
   const [isLoadingSummary, setIsLoadingSummary] = useState(true);
+  const [isLoadingAds, setIsLoadingAds] = useState(true);
   const [isChecking, setIsChecking] = useState(false);
 
   const formattedRevenue = new Intl.NumberFormat("pt-BR", {
@@ -80,6 +92,18 @@ function App() {
       currency: dailySummary?.currencyId ?? "BRL",
       maximumFractionDigits: 0,
     }).format(value);
+
+  const formatAdsCurrency = (value: number) =>
+    new Intl.NumberFormat("pt-BR", {
+      style: "currency",
+      currency: adsSummary?.currencyId ?? dailySummary?.currencyId ?? "BRL",
+      maximumFractionDigits: 0,
+    }).format(value);
+
+  const formattedAcos = new Intl.NumberFormat("pt-BR", {
+    maximumFractionDigits: 1,
+    minimumFractionDigits: 1,
+  }).format(adsSummary?.acos ?? 0);
 
   const shippingCards = [
     {
@@ -112,6 +136,25 @@ function App() {
       })
       .finally(() => {
         setIsLoadingSummary(false);
+      });
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/meli/ads-summary")
+      .then(async (response) => {
+        const payload = (await response.json()) as AdsSummary;
+
+        if (!response.ok || !payload.connected) {
+          throw new Error(payload.message ?? "Publicidade indisponivel.");
+        }
+
+        setAdsSummary(payload);
+      })
+      .catch((error: Error) => {
+        setAdsError(error.message);
+      })
+      .finally(() => {
+        setIsLoadingAds(false);
       });
   }, []);
 
@@ -262,6 +305,15 @@ function App() {
                   </article>
                 );
               })}
+              <article className="metric-card">
+                <span>ACOS Product Ads ontem</span>
+                <strong>{isLoadingAds ? "..." : `${formattedAcos}%`}</strong>
+                <small>
+                  {adsSummary?.connected
+                    ? `${formatAdsCurrency(adsSummary.investment)} investidos em ${adsSummary.date}`
+                    : adsError ?? "Investimento de publicidade"}
+                </small>
+              </article>
             </section>
 
             <section className="wide-panel panel" id="top-skus">
