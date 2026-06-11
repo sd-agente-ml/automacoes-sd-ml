@@ -247,14 +247,16 @@ export default async function handler(
       0,
       Number(request.query.minimumRevenue ?? 100) || 100,
     );
+    const requestedDays = Number(request.query.days ?? 7);
+    const days = requestedDays === 30 ? 30 : 7;
     const token = await refreshAccessToken(refreshToken);
     const userResponse = await fetch("https://api.mercadolibre.com/users/me", {
       headers: { Authorization: `Bearer ${token.access_token}` },
     });
     if (!userResponse.ok) throw new Error("Nao foi possivel identificar a conta.");
     const user = (await userResponse.json()) as UserResponse;
-    const currentRange = range(7, 1);
-    const previousRange = range(14, 8);
+    const currentRange = range(days, 1);
+    const previousRange = range(days * 2, days + 1);
     const [currentOrders, previousOrders] = await Promise.all([
       fetchOrders(token.access_token, user.id, currentRange.from, currentRange.to),
       fetchOrders(token.access_token, user.id, previousRange.from, previousRange.to),
@@ -267,19 +269,22 @@ export default async function handler(
         ...[...previous.values()].map((item) => item.itemId),
       ]),
     ];
-    const [items, visits7d, visits14d] = await Promise.all([
+    const [items, currentVisits, combinedVisits] = await Promise.all([
       fetchItems(token.access_token, itemIds),
-      fetchVisitsWindow(token.access_token, itemIds, 7),
-      fetchVisitsWindow(token.access_token, itemIds, 14),
+      fetchVisitsWindow(token.access_token, itemIds, days),
+      fetchVisitsWindow(token.access_token, itemIds, days * 2),
     ]);
+    const visitsAvailable = [...currentVisits.values()].some(
+      (total) => total > 0,
+    );
 
     const rows = [...current.entries()]
       .map(([key, currentItem]) => {
         const previousItem = previous.get(key);
-        const currentVisitCount = visits7d.get(currentItem.itemId) ?? 0;
+        const currentVisitCount = currentVisits.get(currentItem.itemId) ?? 0;
         const previousVisitCount = Math.max(
           0,
-          (visits14d.get(currentItem.itemId) ?? 0) - currentVisitCount,
+          (combinedVisits.get(currentItem.itemId) ?? 0) - currentVisitCount,
         );
         const currentConversion =
           currentVisitCount > 0 ? currentItem.units / currentVisitCount : 0;
@@ -335,7 +340,9 @@ export default async function handler(
     response.setHeader("Set-Cookie", tokenCookie(token.refresh_token));
     response.status(200).json({
       connected: true,
+      days,
       minimumRevenue,
+      visitsAvailable,
       currentRange,
       previousRange,
       totalCurrentOrders: currentOrders.length,

@@ -38,7 +38,50 @@ type AdsSummary = {
   message?: string;
 };
 
-type ActiveView = "overview" | "purchases" | "catalogs" | "integration";
+type ActiveView =
+  | "overview"
+  | "metrics"
+  | "purchases"
+  | "catalogs"
+  | "integration";
+
+type PerformancePeriod = 7 | 30;
+
+type PerformanceMetricSet = {
+  units: number;
+  orders: number;
+  revenue: number;
+  visits: number;
+  conversion: number;
+};
+
+type PerformanceItem = {
+  itemId: string;
+  sku: string;
+  title: string;
+  image: string | null;
+  current: PerformanceMetricSet;
+  previous: PerformanceMetricSet;
+  change: {
+    units: number | null;
+    revenue: number | null;
+    visits: number | null;
+    conversion: number | null;
+  };
+};
+
+type PerformanceResponse = {
+  connected: boolean;
+  days: PerformancePeriod;
+  minimumRevenue: number;
+  visitsAvailable: boolean;
+  currentRange: { fromDate: string; toDate: string };
+  previousRange: { fromDate: string; toDate: string };
+  totalCurrentOrders: number;
+  totalPreviousOrders: number;
+  items: PerformanceItem[];
+  message?: string;
+};
 
 type PurchaseSuggestion = {
   sku: string;
@@ -98,8 +141,14 @@ function App() {
   const [purchaseError, setPurchaseError] = useState<string | null>(null);
   const [catalogData, setCatalogData] = useState<CatalogsResponse | null>(null);
   const [catalogError, setCatalogError] = useState<string | null>(null);
+  const [performancePeriod, setPerformancePeriod] =
+    useState<PerformancePeriod>(7);
+  const [performanceData, setPerformanceData] =
+    useState<PerformanceResponse | null>(null);
+  const [performanceError, setPerformanceError] = useState<string | null>(null);
   const [isLoadingPurchases, setIsLoadingPurchases] = useState(false);
   const [isLoadingCatalogs, setIsLoadingCatalogs] = useState(false);
+  const [isLoadingPerformance, setIsLoadingPerformance] = useState(false);
   const [isLoadingSummary, setIsLoadingSummary] = useState(true);
   const [isLoadingAds, setIsLoadingAds] = useState(true);
   const [isChecking, setIsChecking] = useState(false);
@@ -135,6 +184,29 @@ function App() {
     maximumFractionDigits: 1,
     minimumFractionDigits: 1,
   }).format(adsSummary?.acos ?? 0);
+
+  const formatDate = (value: string) =>
+    new Intl.DateTimeFormat("pt-BR").format(
+      new Date(`${value}T12:00:00.000Z`),
+    );
+
+  const formatChange = (value: number | null) =>
+    value === null
+      ? "Sem comparativo"
+      : `${value > 0 ? "+" : ""}${new Intl.NumberFormat("pt-BR", {
+          maximumFractionDigits: 1,
+          minimumFractionDigits: 1,
+        }).format(value)}%`;
+
+  const performancePriority = (change: number | null) => {
+    if (change !== null && change <= -40) {
+      return { label: "Critica", className: "critical" };
+    }
+    if (change !== null && change <= -20) {
+      return { label: "Atencao", className: "attention" };
+    }
+    return { label: "Monitorar", className: "monitor" };
+  };
 
   const shippingCards = [
     {
@@ -237,6 +309,42 @@ function App() {
       });
   };
 
+  const loadPerformance = async (
+    days: PerformancePeriod = performancePeriod,
+  ) => {
+    if (isLoadingPerformance) {
+      return;
+    }
+
+    setIsLoadingPerformance(true);
+    setPerformanceError(null);
+    try {
+      const response = await fetch(
+        `/api/meli/listing-performance?days=${days}&minimumRevenue=100`,
+      );
+      const payload = (await response.json()) as PerformanceResponse;
+
+      if (!response.ok || !payload.connected) {
+        throw new Error(payload.message ?? "Metricas indisponiveis.");
+      }
+
+      setPerformanceData(payload);
+      setLastUpdated(formatUpdateTime());
+    } catch (error) {
+      setPerformanceError(
+        error instanceof Error ? error.message : "Metricas indisponiveis.",
+      );
+    } finally {
+      setIsLoadingPerformance(false);
+    }
+  };
+
+  const selectPerformancePeriod = (days: PerformancePeriod) => {
+    setPerformancePeriod(days);
+    setPerformanceData(null);
+    void loadPerformance(days);
+  };
+
   const startMercadoLivreAuth = async () => {
     const response = await fetch("/api/meli/auth-url");
     const payload = (await response.json()) as { authUrl: string };
@@ -272,6 +380,18 @@ function App() {
             onClick={() => setActiveView("overview")}
           >
             Visao geral
+          </button>
+          <button
+            className={`nav-item ${activeView === "metrics" ? "active" : ""}`}
+            type="button"
+            onClick={() => {
+              setActiveView("metrics");
+              if (!performanceData) {
+                void loadPerformance();
+              }
+            }}
+          >
+            Metricas
           </button>
           <button
             className={`nav-item ${activeView === "purchases" ? "active" : ""}`}
@@ -310,29 +430,42 @@ function App() {
             <h1>
               {activeView === "overview"
                 ? "Painel diario da operacao"
-                : activeView === "purchases"
-                  ? "Sugestao de compras"
-                  : activeView === "catalogs"
-                    ? "Competicao de catalogos"
-                    : "Integracao Mercado Livre"}
+                : activeView === "metrics"
+                  ? "Metricas dos anuncios"
+                  : activeView === "purchases"
+                    ? "Sugestao de compras"
+                    : activeView === "catalogs"
+                      ? "Competicao de catalogos"
+                      : "Integracao Mercado Livre"}
             </h1>
             <p className="subtitle">
               {activeView === "overview"
                 ? "Pedidos, faturamento e principais SKUs vendidos no dia anterior."
-                : activeView === "purchases"
-                  ? "Reposicao sugerida para cada SKU com base nos ultimos 30 dias completos."
-                  : activeView === "catalogs"
-                    ? "Anuncios de catalogo com visitas nos ultimos 60 dias, ordenados por status de competicao."
-                    : "Conexao da conta usada para carregar os dados reais do dashboard."}
+                : activeView === "metrics"
+                  ? "Anuncios com queda e faturamento minimo de R$ 100 no periodo selecionado."
+                  : activeView === "purchases"
+                    ? "Reposicao sugerida para cada SKU com base nos ultimos 30 dias completos."
+                    : activeView === "catalogs"
+                      ? "Anuncios de catalogo com visitas nos ultimos 60 dias, ordenados por status de competicao."
+                      : "Conexao da conta usada para carregar os dados reais do dashboard."}
             </p>
           </div>
-          {activeView === "overview" ? (
+          {activeView === "overview" || activeView === "metrics" ? (
             <button
               className="primary-action"
               type="button"
-              onClick={() => setLastUpdated(formatUpdateTime())}
+              disabled={activeView === "metrics" && isLoadingPerformance}
+              onClick={() => {
+                if (activeView === "metrics") {
+                  void loadPerformance();
+                  return;
+                }
+                setLastUpdated(formatUpdateTime());
+              }}
             >
-              Atualizar
+              {activeView === "metrics" && isLoadingPerformance
+                ? "Atualizando"
+                : "Atualizar"}
             </button>
           ) : null}
         </header>
@@ -412,6 +545,145 @@ function App() {
                       : "Nenhum SKU vendido ontem ou conta ainda nao conectada."}
                   </p>
                 )}
+              </div>
+            </section>
+          </>
+        ) : activeView === "metrics" ? (
+          <>
+            <section className="metrics-toolbar" aria-label="Periodo do relatorio">
+              <div>
+                <strong>Periodo analisado</strong>
+                <span>
+                  Comparacao com os {performancePeriod} dias imediatamente
+                  anteriores
+                </span>
+              </div>
+              <div className="period-control" role="group" aria-label="Periodo">
+                {([7, 30] as PerformancePeriod[]).map((days) => (
+                  <button
+                    className={`period-option ${
+                      performancePeriod === days ? "active" : ""
+                    }`}
+                    type="button"
+                    key={days}
+                    disabled={isLoadingPerformance}
+                    onClick={() => selectPerformancePeriod(days)}
+                  >
+                    Ultimos {days} dias
+                  </button>
+                ))}
+              </div>
+            </section>
+
+            {performanceData ? (
+              <section className="performance-summary" aria-label="Resumo">
+                <div>
+                  <span>Periodo atual</span>
+                  <strong>
+                    {formatDate(performanceData.currentRange.fromDate)} a{" "}
+                    {formatDate(performanceData.currentRange.toDate)}
+                  </strong>
+                </div>
+                <div>
+                  <span>Pedidos no periodo</span>
+                  <strong>{performanceData.totalCurrentOrders}</strong>
+                  <small>
+                    {performanceData.totalPreviousOrders} no periodo anterior
+                  </small>
+                </div>
+                <div>
+                  <span>Anuncios em destaque</span>
+                  <strong>{performanceData.items.length}</strong>
+                  <small>Com queda e faturamento acima de R$ 100</small>
+                </div>
+              </section>
+            ) : null}
+
+            {performanceData && !performanceData.visitsAvailable ? (
+              <p className="api-note">
+                Visitas e conversao nao estao disponiveis pela API do Mercado
+                Livre para esta conta. O relatorio usa vendas, unidades e
+                faturamento.
+              </p>
+            ) : null}
+
+            <section className="wide-panel panel performance-panel">
+              <div className="panel-heading">
+                <h2>Produtos que exigem atencao</h2>
+                <span>
+                  {performanceData
+                    ? `Comparado com ${formatDate(
+                        performanceData.previousRange.fromDate,
+                      )} a ${formatDate(performanceData.previousRange.toDate)}`
+                    : `Base: ultimos ${performancePeriod} dias completos`}
+                </span>
+              </div>
+              <div className="purchase-table-wrap">
+                <table className="purchase-table performance-table">
+                  <thead>
+                    <tr>
+                      <th>Imagem</th>
+                      <th>SKU / Produto</th>
+                      <th>Faturamento</th>
+                      <th>Periodo anterior</th>
+                      <th>Variacao</th>
+                      <th>Unidades</th>
+                      <th>Prioridade</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {performanceData?.items.map((item) => {
+                      const priority = performancePriority(item.change.revenue);
+
+                      return (
+                        <tr key={item.itemId}>
+                          <td>
+                            <div className="purchase-image">
+                              {item.image ? (
+                                <img src={item.image} alt="" loading="lazy" />
+                              ) : (
+                                <span>Sem imagem</span>
+                              )}
+                            </div>
+                          </td>
+                          <td>
+                            <strong>{item.sku}</strong>
+                            <span>{item.title}</span>
+                            <small>{item.itemId}</small>
+                          </td>
+                          <td>{formatItemCurrency(item.current.revenue, "BRL")}</td>
+                          <td>
+                            {formatItemCurrency(item.previous.revenue, "BRL")}
+                          </td>
+                          <td>
+                            <strong className="negative-change">
+                              {formatChange(item.change.revenue)}
+                            </strong>
+                          </td>
+                          <td>
+                            <strong>{item.current.units}</strong>
+                            <span>{item.previous.units} anteriormente</span>
+                          </td>
+                          <td>
+                            <span
+                              className={`priority-badge ${priority.className}`}
+                            >
+                              {priority.label}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+                {isLoadingPerformance || !performanceData?.items.length ? (
+                  <p className="empty-state purchase-empty">
+                    {isLoadingPerformance
+                      ? `Analisando os ultimos ${performancePeriod} dias...`
+                      : performanceError ??
+                        "Nenhum anuncio com queda e faturamento minimo de R$ 100 no periodo."}
+                  </p>
+                ) : null}
               </div>
             </section>
           </>
