@@ -41,6 +41,7 @@ type AdsSummary = {
 type ActiveView =
   | "overview"
   | "metrics"
+  | "competition"
   | "purchases"
   | "catalogs"
   | "integration";
@@ -80,6 +81,50 @@ type PerformanceResponse = {
   totalCurrentOrders: number;
   totalPreviousOrders: number;
   items: PerformanceItem[];
+  message?: string;
+};
+
+type CompetitionItem = {
+  itemId: string;
+  sku: string;
+  title: string;
+  image: string | null;
+  categoryId: string | null;
+  revenue30d: number;
+  units30d: number;
+  price: number;
+  unitPrice: number;
+  packageQuantity: number;
+  permalink: string | null;
+  organicResultsAnalyzed: number;
+  rankingSource: "search" | "category_highlights" | "unavailable";
+  competitors: Array<{
+    itemId: string;
+    title: string;
+    image: string | null;
+    position: number;
+    price: number;
+    unitPrice: number;
+    packageQuantity: number;
+    priceDifference: number;
+    similarity: number;
+    permalink: string | null;
+  }>;
+};
+
+type CompetitionResponse = {
+  connected: boolean;
+  fromDate: string;
+  toDate: string;
+  minimumRevenue: number;
+  analyzedProducts: number;
+  flaggedProducts: number;
+  rankingSources: {
+    search: number;
+    category_highlights: number;
+    unavailable: number;
+  };
+  items: CompetitionItem[];
   message?: string;
 };
 
@@ -146,9 +191,13 @@ function App() {
   const [performanceData, setPerformanceData] =
     useState<PerformanceResponse | null>(null);
   const [performanceError, setPerformanceError] = useState<string | null>(null);
+  const [competitionData, setCompetitionData] =
+    useState<CompetitionResponse | null>(null);
+  const [competitionError, setCompetitionError] = useState<string | null>(null);
   const [isLoadingPurchases, setIsLoadingPurchases] = useState(false);
   const [isLoadingCatalogs, setIsLoadingCatalogs] = useState(false);
   const [isLoadingPerformance, setIsLoadingPerformance] = useState(false);
+  const [isLoadingCompetition, setIsLoadingCompetition] = useState(false);
   const [isLoadingSummary, setIsLoadingSummary] = useState(true);
   const [isLoadingAds, setIsLoadingAds] = useState(true);
   const [isChecking, setIsChecking] = useState(false);
@@ -345,6 +394,36 @@ function App() {
     void loadPerformance(days);
   };
 
+  const loadCompetition = async () => {
+    if (isLoadingCompetition) {
+      return;
+    }
+
+    setIsLoadingCompetition(true);
+    setCompetitionError(null);
+    try {
+      const response = await fetch(
+        "/api/meli/competition-analysis?minimumRevenue=800",
+      );
+      const payload = (await response.json()) as CompetitionResponse;
+
+      if (!response.ok || !payload.connected) {
+        throw new Error(payload.message ?? "Analise de concorrencia indisponivel.");
+      }
+
+      setCompetitionData(payload);
+      setLastUpdated(formatUpdateTime());
+    } catch (error) {
+      setCompetitionError(
+        error instanceof Error
+          ? error.message
+          : "Analise de concorrencia indisponivel.",
+      );
+    } finally {
+      setIsLoadingCompetition(false);
+    }
+  };
+
   const startMercadoLivreAuth = async () => {
     const response = await fetch("/api/meli/auth-url");
     const payload = (await response.json()) as { authUrl: string };
@@ -394,6 +473,20 @@ function App() {
             Metricas
           </button>
           <button
+            className={`nav-item ${
+              activeView === "competition" ? "active" : ""
+            }`}
+            type="button"
+            onClick={() => {
+              setActiveView("competition");
+              if (!competitionData) {
+                void loadCompetition();
+              }
+            }}
+          >
+            Concorrencia
+          </button>
+          <button
             className={`nav-item ${activeView === "purchases" ? "active" : ""}`}
             type="button"
             onClick={() => {
@@ -432,38 +525,52 @@ function App() {
                 ? "Painel diario da operacao"
                 : activeView === "metrics"
                   ? "Metricas dos anuncios"
-                  : activeView === "purchases"
-                    ? "Sugestao de compras"
-                    : activeView === "catalogs"
-                      ? "Competicao de catalogos"
-                      : "Integracao Mercado Livre"}
+                  : activeView === "competition"
+                    ? "Analise de concorrencia"
+                    : activeView === "purchases"
+                      ? "Sugestao de compras"
+                      : activeView === "catalogs"
+                        ? "Competicao de catalogos"
+                        : "Integracao Mercado Livre"}
             </h1>
             <p className="subtitle">
               {activeView === "overview"
                 ? "Pedidos, faturamento e principais SKUs vendidos no dia anterior."
                 : activeView === "metrics"
                   ? "Anuncios com queda e faturamento minimo de R$ 100 no periodo selecionado."
-                  : activeView === "purchases"
-                    ? "Reposicao sugerida para cada SKU com base nos ultimos 30 dias completos."
-                    : activeView === "catalogs"
-                      ? "Anuncios de catalogo com visitas nos ultimos 60 dias, ordenados por status de competicao."
-                      : "Conexao da conta usada para carregar os dados reais do dashboard."}
+                  : activeView === "competition"
+                    ? "Concorrentes organicos relevantes com preco por unidade mais de 10% abaixo."
+                    : activeView === "purchases"
+                      ? "Reposicao sugerida para cada SKU com base nos ultimos 30 dias completos."
+                      : activeView === "catalogs"
+                        ? "Anuncios de catalogo com visitas nos ultimos 60 dias, ordenados por status de competicao."
+                        : "Conexao da conta usada para carregar os dados reais do dashboard."}
             </p>
           </div>
-          {activeView === "overview" || activeView === "metrics" ? (
+          {activeView === "overview" ||
+          activeView === "metrics" ||
+          activeView === "competition" ? (
             <button
               className="primary-action"
               type="button"
-              disabled={activeView === "metrics" && isLoadingPerformance}
+              disabled={
+                (activeView === "metrics" && isLoadingPerformance) ||
+                (activeView === "competition" && isLoadingCompetition)
+              }
               onClick={() => {
                 if (activeView === "metrics") {
                   void loadPerformance();
                   return;
                 }
+                if (activeView === "competition") {
+                  void loadCompetition();
+                  return;
+                }
                 setLastUpdated(formatUpdateTime());
               }}
             >
-              {activeView === "metrics" && isLoadingPerformance
+              {(activeView === "metrics" && isLoadingPerformance) ||
+              (activeView === "competition" && isLoadingCompetition)
                 ? "Atualizando"
                 : "Atualizar"}
             </button>
@@ -686,6 +793,181 @@ function App() {
                 ) : null}
               </div>
             </section>
+          </>
+        ) : activeView === "competition" ? (
+          <>
+            {competitionData ? (
+              <section className="performance-summary" aria-label="Resumo">
+                <div>
+                  <span>Periodo de faturamento</span>
+                  <strong>
+                    {formatDate(competitionData.fromDate)} a{" "}
+                    {formatDate(competitionData.toDate)}
+                  </strong>
+                </div>
+                <div>
+                  <span>Produtos analisados</span>
+                  <strong>{competitionData.analyzedProducts}</strong>
+                  <small>Faturamento acima de R$ 800 em 30 dias</small>
+                </div>
+                <div>
+                  <span>Produtos com alerta</span>
+                  <strong>{competitionData.flaggedProducts}</strong>
+                  <small>Concorrente relevante mais de 10% abaixo</small>
+                </div>
+              </section>
+            ) : null}
+
+            <p className="api-note competition-note">
+              A posicao usa a busca organica autenticada quando disponivel e o
+              ranking oficial da categoria como alternativa. Anuncios
+              patrocinados e produtos sem similaridade relevante sao
+              ignorados.
+            </p>
+
+            {competitionData?.rankingSources.unavailable ? (
+              <p className="api-note">
+                O Mercado Livre nao liberou uma fonte de ranking para{" "}
+                {competitionData.rankingSources.unavailable} produtos. Eles nao
+                foram tratados como produtos sem concorrencia.
+              </p>
+            ) : null}
+
+            <div className="competition-list">
+              {competitionData?.items.map((item) => (
+                <section className="panel competition-product" key={item.itemId}>
+                  <div className="competition-product-heading">
+                    <div className="competition-own-image">
+                      {item.image ? (
+                        <img src={item.image} alt="" loading="lazy" />
+                      ) : (
+                        <span>Sem imagem</span>
+                      )}
+                    </div>
+                    <div className="competition-product-title">
+                      <span>{item.sku}</span>
+                      <h2>{item.title}</h2>
+                      <small>
+                        {item.categoryId} · {item.organicResultsAnalyzed} posicoes
+                        organicas analisadas ·{" "}
+                        {item.rankingSource === "search"
+                          ? "Busca organica"
+                          : "Ranking da categoria"}
+                      </small>
+                    </div>
+                    <div className="competition-own-metrics">
+                      <div>
+                        <span>Seu preco</span>
+                        <strong>{formatItemCurrency(item.price, "BRL")}</strong>
+                        {item.packageQuantity > 1 ? (
+                          <small>
+                            {formatItemCurrency(item.unitPrice, "BRL")} por
+                            unidade
+                          </small>
+                        ) : null}
+                      </div>
+                      <div>
+                        <span>Faturamento 30d</span>
+                        <strong>
+                          {formatItemCurrency(item.revenue30d, "BRL")}
+                        </strong>
+                        <small>{item.units30d} unidades vendidas</small>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="purchase-table-wrap">
+                    <table className="purchase-table competition-table">
+                      <thead>
+                        <tr>
+                          <th>Posicao</th>
+                          <th>Concorrente</th>
+                          <th>Preco</th>
+                          <th>Preco por unidade</th>
+                          <th>Diferenca</th>
+                          <th>Similaridade</th>
+                          <th>Anuncio</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {item.competitors.map((competitor) => (
+                          <tr key={competitor.itemId}>
+                            <td>
+                              <strong>#{competitor.position}</strong>
+                            </td>
+                            <td>
+                              <div className="competitor-identity">
+                                <div className="competitor-image">
+                                  {competitor.image ? (
+                                    <img
+                                      src={competitor.image}
+                                      alt=""
+                                      loading="lazy"
+                                    />
+                                  ) : (
+                                    <span>Sem imagem</span>
+                                  )}
+                                </div>
+                                <div>
+                                  <strong>{competitor.title}</strong>
+                                  <span>{competitor.itemId}</span>
+                                </div>
+                              </div>
+                            </td>
+                            <td>
+                              {formatItemCurrency(competitor.price, "BRL")}
+                            </td>
+                            <td>
+                              {formatItemCurrency(competitor.unitPrice, "BRL")}
+                              {competitor.packageQuantity > 1 ? (
+                                <span>
+                                  Kit com {competitor.packageQuantity} unidades
+                                </span>
+                              ) : null}
+                            </td>
+                            <td>
+                              <strong className="negative-change">
+                                {formatChange(competitor.priceDifference)}
+                              </strong>
+                            </td>
+                            <td>{competitor.similarity}%</td>
+                            <td>
+                              {competitor.permalink ? (
+                                <a
+                                  className="table-link"
+                                  href={competitor.permalink}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                >
+                                  Abrir
+                                </a>
+                              ) : (
+                                "-"
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+              ))}
+            </div>
+
+            {isLoadingCompetition || !competitionData?.items.length ? (
+              <section className="panel competition-empty">
+                <p className="empty-state">
+                  {isLoadingCompetition
+                    ? "Analisando produtos, categorias e ranking organico..."
+                    : competitionData &&
+                        competitionData.rankingSources.unavailable ===
+                          competitionData.analyzedProducts
+                      ? "O Mercado Livre nao liberou o ranking organico dos produtos para esta aplicacao. Nenhum resultado foi classificado como ausencia de concorrencia."
+                    : competitionError ??
+                      "Nenhum concorrente relevante mais de 10% abaixo foi encontrado."}
+                </p>
+              </section>
+            ) : null}
           </>
         ) : activeView === "purchases" ? (
           <section className="wide-panel panel">

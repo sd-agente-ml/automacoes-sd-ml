@@ -551,6 +551,120 @@ h2 {
   color: var(--muted);
 }
 
+.competition-note {
+  border-left-color: var(--accent);
+  background: #edf8f7;
+  color: var(--accent-strong);
+}
+
+.competition-list {
+  display: grid;
+  gap: 16px;
+}
+
+.competition-product-heading {
+  display: grid;
+  grid-template-columns: 72px minmax(280px, 1fr) minmax(300px, auto);
+  gap: 16px;
+  align-items: center;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.competition-own-image,
+.competitor-image {
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 8px;
+  background: var(--surface-muted);
+}
+
+.competition-own-image {
+  width: 72px;
+  height: 72px;
+}
+
+.competition-own-image img,
+.competitor-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.competition-own-image span,
+.competitor-image span {
+  padding: 5px;
+  color: var(--muted);
+  font-size: 0.68rem;
+  text-align: center;
+}
+
+.competition-product-title {
+  min-width: 0;
+}
+
+.competition-product-title > span,
+.competition-product-title small,
+.competition-own-metrics span,
+.competition-own-metrics small {
+  display: block;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.competition-product-title > span {
+  color: var(--accent);
+  font-weight: 800;
+}
+
+.competition-product-title h2 {
+  margin: 5px 0;
+  line-height: 1.35;
+}
+
+.competition-own-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(135px, 1fr));
+  gap: 20px;
+}
+
+.competition-own-metrics strong {
+  display: block;
+  margin: 4px 0;
+  font-size: 1.1rem;
+}
+
+.competition-table td:nth-child(2) {
+  min-width: 340px;
+}
+
+.competitor-identity {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+}
+
+.competitor-image {
+  width: 48px;
+  height: 48px;
+}
+
+.table-link {
+  color: var(--accent);
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.table-link:hover {
+  text-decoration: underline;
+}
+
+.competition-empty {
+  padding: 18px;
+}
+
 .status-pill {
   display: inline-flex;
   align-items: center;
@@ -658,6 +772,14 @@ h2 {
   .performance-summary > div:last-child {
     border-bottom: 0;
   }
+
+  .competition-product-heading {
+    grid-template-columns: 72px minmax(0, 1fr);
+  }
+
+  .competition-own-metrics {
+    grid-column: 1 / -1;
+  }
 }
 
 @media (max-width: 680px) {
@@ -690,5 +812,14 @@ h2 {
 
   .period-control {
     width: 100%;
+  }
+
+  .competition-product-heading {
+    grid-template-columns: 1fr;
+  }
+
+  .competition-own-metrics {
+    grid-template-columns: 1fr 1fr;
+    grid-column: auto;
   }
 }
