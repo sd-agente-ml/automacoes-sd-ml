@@ -229,10 +229,21 @@ function App() {
       maximumFractionDigits: 2,
     }).format(value);
 
+  const totalAdsInvestment = adsSummary?.investment ?? 0;
+  const tacos =
+    totalAdsInvestment > 0
+      ? ((dailySummary?.revenue ?? 0) / totalAdsInvestment) * 100
+      : 0;
+
   const formattedAcos = new Intl.NumberFormat("pt-BR", {
     maximumFractionDigits: 1,
     minimumFractionDigits: 1,
   }).format(adsSummary?.acos ?? 0);
+
+  const formattedTacos = new Intl.NumberFormat("pt-BR", {
+    maximumFractionDigits: 1,
+    minimumFractionDigits: 1,
+  }).format(tacos);
 
   const formatDate = (value: string) =>
     new Intl.DateTimeFormat("pt-BR").format(
@@ -621,6 +632,17 @@ function App() {
                   {adsSummary?.connected
                     ? `${formatAdsCurrency(adsSummary.investment)} investidos em ${adsSummary.date}`
                     : adsError ?? "Investimento de publicidade"}
+                </small>
+              </article>
+              <article className="metric-card">
+                <span>TACOS total ontem</span>
+                <strong>
+                  {isLoadingSummary || isLoadingAds ? "..." : `${formattedTacos}%`}
+                </strong>
+                <small>
+                  {dailySummary?.connected && adsSummary?.connected
+                    ? `${formattedRevenue} / ${formatAdsCurrency(totalAdsInvestment)} em ${dailySummary.date}`
+                    : summaryError ?? adsError ?? "Faturamento / publicidade"}
                 </small>
               </article>
             </section>
