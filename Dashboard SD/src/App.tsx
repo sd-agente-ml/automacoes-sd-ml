@@ -230,9 +230,10 @@ function App() {
     }).format(value);
 
   const totalAdsInvestment = adsSummary?.investment ?? 0;
+  const totalRevenue = dailySummary?.revenue ?? 0;
   const tacos =
-    totalAdsInvestment > 0
-      ? ((dailySummary?.revenue ?? 0) / totalAdsInvestment) * 100
+    totalRevenue > 0
+      ? (totalAdsInvestment * 100) / totalRevenue
       : 0;
 
   const formattedAcos = new Intl.NumberFormat("pt-BR", {
@@ -641,7 +642,7 @@ function App() {
                 </strong>
                 <small>
                   {dailySummary?.connected && adsSummary?.connected
-                    ? `${formattedRevenue} / ${formatAdsCurrency(totalAdsInvestment)} em ${dailySummary.date}`
+                    ? `${formatAdsCurrency(totalAdsInvestment)} / ${formattedRevenue} em ${dailySummary.date}`
                     : summaryError ?? adsError ?? "Faturamento / publicidade"}
                 </small>
               </article>
